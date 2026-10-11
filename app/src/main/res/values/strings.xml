@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Money Manager</string>
+    <string name="channel_transactions">New transactions</string>
+    <string name="channel_transactions_desc">A short note each time a bank SMS is recorded</string>
+</resources>

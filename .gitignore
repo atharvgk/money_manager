@@ -1,0 +1,56 @@
+# ---------------------------------------------------------------- secrets (never commit)
+# App signing key. Whoever has it can sign an APK that installs as an "update" to your app.
+# Keep it on your PC (and a backup); GitHub Actions gets it from a repository secret instead.
+keystore/
+*.keystore
+*.jks
+keystore.properties
+signing.properties
+
+# ---------------------------------------------------------------- personal data (never commit)
+# Your real bank SMS, used only by the local parser tests.
+samples.txt
+samples*.txt
+!core/src/test/resources/samples-example.txt
+# Exports from the app (Settings → Export) if you copy them here.
+money-manager-backup-*.json
+money-manager-*.csv
+*.db
+*.db-shm
+*.db-wal
+
+# ---------------------------------------------------------------- machine-specific
+# Contains the SDK path (and your Windows username).
+local.properties
+
+# ---------------------------------------------------------------- build output
+.gradle/
+.kotlin/
+build/
+*/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.hprof
+*.log
+
+# ---------------------------------------------------------------- editors & OS
+.idea/
+*.iml
+.vscode/
+# VS Code's Java extension (Eclipse) compiles copies of the sources into bin/
+bin/
+.project
+.classpath
+.settings/
+.factorypath
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.swp

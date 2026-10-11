@@ -1,0 +1,28 @@
+# Example of the samples.txt format (this file is used by the tests to check the reader).
+# Paste one SMS per block. Separate blocks with an empty line or a line with just ---.
+# Optional "From:" first line and "=>" expectation last line.
+
+From: VM-HDFCBK-S
+Sent Rs.450.00
+From HDFC Bank A/C *1234
+To SWIGGY
+On 05/10/25
+Ref 527812345678
+Not You?
+Call 18002586161/SMS BLOCK UPI to 7308080808
+=> debit 450.00 merchant=Swiggy acct=1234 ref=527812345678
+
+---
+From: AX-AXISBK
+INR 1000.00 credited
+A/c no. XX1234
+05-10-25, 14:23:11 IST
+UPI/P2A/527812345678/JOHN DOE
+Not you? SMS BLOCKUPI Cust ID to 919951860002
+Axis Bank
+=> credit 1000 merchant=John_Doe
+
+Dear UPI user A/C X1234 debited by 450.0 on date 05Oct25 trf to SWIGGY Refno 527812345678. If not u? call 1800111109. -SBI
+
+123456 is OTP for txn of INR 1,234.00 at AMAZON on HDFC Bank card ending 5678. Do not share OTP for security reasons
+=> ignore

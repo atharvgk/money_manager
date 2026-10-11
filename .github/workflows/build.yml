@@ -1,0 +1,72 @@
+# Builds the APK on GitHub's servers (Plan B if building on your PC ever stops working).
+# Every push to main (or "Run workflow" in the Actions tab) runs the tests and builds app-debug.apk.
+#
+# Signing: the app's key is NOT in the repository. Add it once as a repository secret named
+# SIGNING_KEYSTORE_BASE64 (see README, "Plan B"). With the secret, the APK is signed with your key,
+# uploaded as an artifact and published as a GitHub Release you can install over the app on your phone.
+# Without it, the build still runs (as a check) but nothing is published.
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-37.0 build-tools;37.0.0"
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Restore signing key from secret
+        id: key
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE_BASE64" ]; then
+            mkdir -p keystore
+            echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > keystore/debug.keystore
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Secret SIGNING_KEYSTORE_BASE64 is not set, so this APK is signed with a throwaway key and won't be published."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run tests and build
+        run: |
+          chmod +x gradlew
+          ./gradlew test assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        if: steps.key.outputs.signed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish as a GitHub Release
+        if: steps.key.outputs.signed == 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Money Manager build ${{ github.run_number }}
+          body: "Debug APK built from ${{ github.sha }}. Install over the previous version; your data is kept."
+          files: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f keystore/debug.keystore
