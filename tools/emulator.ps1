@@ -3,7 +3,7 @@
 
   From the project folder, in PowerShell:
       .\tools\emulator.ps1              start the virtual phone, install the latest app build, open it
-      .\tools\emulator.ps1 -Seed        ...and also give it ~3 months of sample bank SMS (fills Compare/Recurring)
+      .\tools\emulator.ps1 -Seed        ...and also give it ~3 months of sample bank SMS (fills Compare/Bills)
       .\tools\emulator.ps1 -Fresh       ...but uninstall the app first, to start again from onboarding
       .\tools\emulator.ps1 -Wipe        factory-reset the whole virtual phone (slow first boot again)
       Switches combine, e.g.  .\tools\emulator.ps1 -Fresh -Seed

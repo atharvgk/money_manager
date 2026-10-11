@@ -3,11 +3,21 @@
 A personal Android expense tracker that reads your bank SMS, sorts spending into categories and compares months.
 India-only (₹, Indian banks), single user, sideloaded. **The app has no internet permission**: nothing leaves your phone.
 
-- **Home**: month picker, spent vs income, change vs last month, category donut, top merchants, daily spend.
+- **Home**: pick a month; switch between *All*, *Bank accounts* and *Credit cards*. Shows:
+  - **Spent so far**, compared with the same days of last month (1–11 Oct vs 1–11 Sep, so a half-finished month isn't compared with a whole one).
+  - Money in, money out and net.
+  - **Monthly budget**: what's left, a daily allowance, and where the month is heading.
+  - **Where it went** (top categories), **Biggest changes** vs last month.
+  - **Coming up** (bills due in the next 2 weeks) and **Recent transactions** with account chips.
+- **Spending details** (tap the total or any category):
+  - Trend as *Pace* (running total against last month), *6 months* (with average) or *Daily*.
+  - Category breakdown, or for a category its top merchants and transactions.
+  - Filter by account.
+- **Categories**: every category for the month with its share and change vs last month.
 - **Compare**: stacked bars for the last 6 or 12 months, plus a category × month table with ▲/▼ changes.
 - **Transactions**: search, filter by category / account / dates, tap to change category, note or exclude.
-- **Recurring**: subscriptions, rent, SIPs and EMIs detected automatically.
-- **Settings**: rules editor, rescan inbox, unparsed SMS, JSON backup/restore, CSV export, app lock, theme.
+- **Bills**: calendar of subscriptions, rent, SIPs and EMIs (detected automatically): paid, due, or expected but not seen.
+- **Settings**: monthly budget, rules editor, rescan inbox, unparsed SMS, JSON backup/restore, CSV export, app lock, theme.
 
 ---
 
@@ -36,7 +46,8 @@ same key, so you can switch between debug and release builds without losing data
 .\gradlew test
 ```
 
-This runs about 80 parser/categoriser/analysis tests, plus your own `samples.txt` if it exists (see section 5).
+This runs about 100 tests (parser, categoriser, analysis, bill calendar, spending/budget maths), plus your own
+`samples.txt` if it exists (see section 5).
 
 > ⚠️ `.\gradlew connectedDebugAndroidTest` runs the same tests on a connected phone or emulator. **Never run it
 > with your own phone plugged in**: Android's test runner uninstalls the app afterwards, which deletes its data.
@@ -61,8 +72,8 @@ To get `adb` and the right `JAVA_HOME`/`ANDROID_HOME` in a PowerShell window, ru
 ```
 
 This builds the app, opens a virtual Android 16 phone in a window, installs Money Manager, and gives it about
-3 months of realistic bank SMS (salary, rent, Netflix, SIP, Swiggy, Uber, a card bill, plus an OTP, a promo,
-a failed payment and one unreadable message) so every screen has something to show. Click with the mouse like
+3 months of realistic bank SMS (salary, rent, Netflix, SIP, Swiggy, Uber, credit card spends and a card bill, plus
+an OTP, a promo, a failed payment and one unreadable message) so every screen has something to show. Click with the mouse like
 a finger; the onboarding asks for the same permissions as on a real phone.
 
 | Command | What it does |
@@ -112,6 +123,9 @@ Your data survives updates as long as two things stay the same:
    build can't update the installed app and you'd have to export → uninstall → import. A fresh clone without the
    file still builds, using Android's standard debug key, but that APK can't update the app on your phone.
 
+Updates that add features upgrade the data already on your phone the first time they start (e.g. the Bank /
+Credit cards split re-reads stored SMS to tell your cards apart); no rescan needed.
+
 So: build, then install over the top (method A or B). **Don't uninstall first.** `versionCode` can stay the same or go up,
 never down. Export a JSON backup before big updates anyway (Settings → Export everything).
 
@@ -127,9 +141,10 @@ core/   pure Kotlin, no Android, fast unit tests
   parse/       SmsParser (pipeline), BankRules (regex rule list), Filters (OTP/promo/balance/failed/reminder),
                Extract (amount, account, ref, VPA, merchant), Dates, Senders, MerchantNames
   categorize/  Categories, SeedRules (merchant keyword → category), Categorizer
-  analysis/    Dedupe, RecurringDetector, Summaries
+  analysis/    Dedupe, RecurringDetector, BillCalendar, Summaries
   format/      Inr (₹1,23,456 formatting)
 app/    Android: Compose UI, Room database, SMS receiver, WorkManager sync, notifications, backup
+  ui/common/SpendMath.kt   same-days comparison, Bank/Cards split, budget, trend series (unit-tested in app/src/test)
 ```
 
 - **Live SMS**: `SmsReceiver` parses each new SMS, stores it, and notifies "₹450 at Swiggy → Food & Dining".
@@ -140,6 +155,12 @@ app/    Android: Compose UI, Room database, SMS receiver, WorkManager sync, noti
 - **Duplicates** (same payment as a bank SMS and a card/UPI SMS): same direction and amount, and either the same
   reference/UPI ref, or (without refs) within 2 minutes on the same account.
 - **Credit-card bill payments** are excluded from totals automatically (otherwise you'd count every card purchase twice).
+- **Bank accounts vs credit cards**: a card is a credit card when an SMS says so ("Credit Card", "Avl Limit",
+  "BLOCK CC", a card-only issuer like SBI Card or Amex). Once any SMS calls card ••5678 a credit card, its plain
+  "Card 5678" messages count as credit card too. Debit cards and cash count with bank accounts.
+- **Budget**: one monthly amount for everything. "Where the month is heading" adds your everyday rate (food,
+  groceries, travel…) for the remaining days to what's spent so far; rent, SIPs, bills and transfers aren't
+  extrapolated, because they come once a month.
 - **Categories**: your rules → refund/income for credits → ATM → built-in merchant keywords → person-to-person UPI
   → Other. Changing a category with "Apply to all from this merchant" saves a rule and updates past transactions.
 

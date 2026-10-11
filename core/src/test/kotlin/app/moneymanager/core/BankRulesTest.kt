@@ -327,4 +327,22 @@ class BankRulesTest {
         txn("", "Rs.450.00 debited from a/c **1234 on 05-10-25 to VPA swiggy@axisbank(UPI Ref No 527812345678).")
             .check(DEBIT, 450.0, account = "1234")
     }
+
+    // ------------------------------------------------------------------ credit card vs bank account (Home's Bank / Cards split)
+
+    @Test fun credit_cards_are_told_apart_from_debit_cards_and_accounts() {
+        fun kind(sender: String, body: String) = txn(sender, body).accountKind
+        // "Avl Limit" / "Avl Lmt" / "BLOCK CC" / a card-only issuer → credit card
+        assertEquals(AccountKind.CREDIT_CARD, kind("VK-ICICIB", "INR 1,234.00 spent using ICICI Bank Card XX5678 on 05-Oct-25 on AMAZON. Avl Limit: INR 1,00,000.00."))
+        assertEquals(AccountKind.CREDIT_CARD, kind("AX-AXISBK", "Spent\nCard no. XX5678\nINR 1234.00\n05-10-25 14:23:11\nAMAZON\nAvl Lmt INR 98,766.00\nAxis Bank"))
+        assertEquals(AccountKind.CREDIT_CARD, kind("VM-HDFCBK", "Txn Rs.499.00\nOn HDFC Bank Card 5678\nAt NETFLIX\nby UPI 527812345670\nOn 05-10\nSMS BLOCK CC 5678 to 7308080808"))
+        assertEquals(AccountKind.CREDIT_CARD, kind("AM-AMEXIN", "Alert: You've spent INR 1,234.00 on your AMEX card ** 12345 at UBER INDIA on 5 October 2025 at 10:20 AM IST."))
+        assertEquals(AccountKind.CREDIT_CARD, kind("VK-ICICIB", "Payment of INR 10,000.00 has been received on your ICICI Bank Credit Card Account XX5678 on 05-Oct-25."))
+        assertEquals(AccountKind.CREDIT_CARD, kind("VM-KOTAKB", "Rs.1234.00 spent on Kotak Credit Card XX5678 at ZOMATO on 05/10/2025. Avl limit Rs 1,00,000"))
+        // "BLOCK DC" / "Debit Card" → debit card (counts with the bank account)
+        assertEquals(AccountKind.DEBIT_CARD, kind("JD-HDFCBK-T", "Spent Rs.1234.50 On HDFC Bank Card 5678 At AMAZON On 2025-10-05:14:23:11 Bal Rs.45678.00 SMS BLOCK DC 5678 to 7308080808"))
+        // A bank account debit that mentions paying a credit card stays a bank account.
+        assertEquals(AccountKind.BANK, kind("VM-HDFCBK", "Rs 5000.00 debited from A/c XX1234 on 05-10-25 towards HDFC Bank Credit Card bill payment"))
+        assertEquals(AccountKind.BANK, kind("VM-HDFCBK", "Rs.450.00 debited from a/c **1234 on 05-10-25 to VPA swiggy@axisbank(UPI Ref No 527812345678)."))
+    }
 }

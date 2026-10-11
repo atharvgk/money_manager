@@ -1,7 +1,6 @@
 package app.moneymanager.ui.common
 
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -36,11 +35,6 @@ import com.patrykandpatrick.vico.compose.common.component.LineComponent
 import com.patrykandpatrick.vico.compose.common.component.rememberLineComponent
 import com.patrykandpatrick.vico.compose.common.component.rememberShapeComponent
 import com.patrykandpatrick.vico.compose.common.component.rememberTextComponent
-import com.patrykandpatrick.vico.compose.pie.PieChart
-import com.patrykandpatrick.vico.compose.pie.PieChartHost
-import com.patrykandpatrick.vico.compose.pie.PieSize
-import com.patrykandpatrick.vico.compose.pie.data.PieChartModel
-import com.patrykandpatrick.vico.compose.pie.rememberPieChart
 
 private val rupeeAxis = CartesianValueFormatter { _, value, _ -> Inr.compact((value * 100).toLong()) }
 
@@ -77,50 +71,6 @@ private fun axisLabel() = rememberTextComponent(
     padding = Insets(2.dp, 2.dp, 2.dp, 2.dp),
 )
 
-/** Daily spend for one month: one series, so one colour and no legend. */
-@Composable
-fun DailySpendChart(dailyPaise: LongArray, modifier: Modifier = Modifier) {
-    val producer = remember { CartesianChartModelProducer() }
-    val key = dailyPaise.contentHashCode()
-    LaunchedEffect(key) {
-        producer.runTransaction { columnModel { series(dailyPaise.map { it / 100.0 }) } }
-    }
-    val colors = LocalMoneyColors.current
-    val column = rememberLineComponent(
-        fill = Fill(colors.chartSeries),
-        thickness = 6.dp,
-        shape = RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp),
-    )
-    val grid = rememberLineComponent(fill = Fill(colors.gridline), thickness = 1.dp)
-    CartesianChartHost(
-        chart = rememberCartesianChart(
-            rememberColumnCartesianLayer(columnProvider = ColumnCartesianLayer.ColumnProvider.series(column)),
-            startAxis = VerticalAxis.rememberStart(
-                label = axisLabel(),
-                valueFormatter = rupeeAxis,
-                line = null,
-                tick = null,
-                guideline = grid,
-                itemPlacer = remember { VerticalAxis.ItemPlacer.count({ 4 }) },
-            ),
-            bottomAxis = HorizontalAxis.rememberBottom(
-                label = axisLabel(),
-                valueFormatter = remember { CartesianValueFormatter { _, x, _ -> (x.toInt() + 1).toString() } },
-                guideline = null,
-                tick = null,
-                line = grid,
-                itemPlacer = remember { HorizontalAxis.ItemPlacer.aligned(spacing = { 5 }) },
-            ),
-            marker = rememberRupeeMarker(),
-        ),
-        modelProducer = producer,
-        modifier = modifier.fillMaxWidth(),
-        scrollState = rememberVicoScrollState(scrollEnabled = false),
-        zoomState = rememberVicoZoomState(zoomEnabled = false, initialZoom = remember { Zoom.Content }),
-        chartAreaHeight = 170.dp,
-    )
-}
-
 /**
  * Months on the x axis, one stacked segment per category. [series] and [colors] must line up;
  * callers fold the tail into "Other" so there are never more than 7 coloured series.
@@ -139,7 +89,7 @@ fun StackedMonthsChart(labels: List<String>, series: List<List<Double>>, colors:
             }
         }
     }
-    val surface = MaterialTheme.colorScheme.surfaceContainerLow
+    val surface = LocalMoneyColors.current.card
     val columns = remember(colors, surface) {
         // A thin surface-coloured stroke gives the 2px gap between stacked segments.
         colors.map { LineComponent(Fill(it), 18.dp, RoundedCornerShape(2.dp), strokeFill = Fill(surface), strokeThickness = 1.dp) }
@@ -174,23 +124,5 @@ fun StackedMonthsChart(labels: List<String>, series: List<List<Double>>, colors:
         scrollState = rememberVicoScrollState(scrollEnabled = false),
         zoomState = rememberVicoZoomState(zoomEnabled = false, initialZoom = remember { Zoom.Content }),
         chartAreaHeight = 220.dp,
-    )
-}
-
-/** Part-to-whole donut. Callers keep it to ≤ 6 segments (top 5 + "Other"). */
-@Composable
-fun CategoryDonut(values: List<Double>, colors: List<Color>, modifier: Modifier = Modifier) {
-    if (values.isEmpty() || values.sum() <= 0.0) return
-    val slices = remember(colors) { PieChart.SliceProvider.series(colors.map { PieChart.Slice(fill = Fill(it)) }) }
-    val model = remember(values) { PieChartModel.build(*values.toTypedArray()) }
-    PieChartHost(
-        chart = rememberPieChart(
-            sliceProvider = slices,
-            spacing = 2.dp,
-            innerSize = PieSize.Inner.fixed(104.dp),
-        ),
-        model = model,
-        modifier = modifier.size(150.dp),
-        chartAreaHeight = 150.dp,
     )
 }

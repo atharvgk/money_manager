@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +51,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,7 +66,10 @@ import app.moneymanager.data.db.AccountRow
 import app.moneymanager.data.db.CategoryEntity
 import app.moneymanager.data.db.TransactionEntity
 import app.moneymanager.ui.common.AmountText
+import app.moneymanager.ui.common.CASH_KEY
 import app.moneymanager.ui.common.CategoryBadge
+import app.moneymanager.ui.common.categoryIcon
+import app.moneymanager.ui.common.color
 import app.moneymanager.ui.common.EmptyState
 import app.moneymanager.ui.common.appViewModel
 import app.moneymanager.ui.common.dayHeader
@@ -72,6 +80,7 @@ import app.moneymanager.ui.common.shortDate
 import app.moneymanager.ui.common.timeOfDay
 import app.moneymanager.ui.common.toLocalDate
 import app.moneymanager.ui.common.zone
+import app.moneymanager.ui.theme.LocalMoneyColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -105,11 +114,12 @@ data class TxState(
 }
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
-class TransactionsViewModel(c: AppContainer, initialCategory: String, initialMonth: String) : ViewModel() {
+class TransactionsViewModel(c: AppContainer, initialCategory: String, initialMonth: String, initialAccount: String) : ViewModel() {
     private val repo = c.repository
     val filter = MutableStateFlow(
         TxnFilter(
             categories = if (initialCategory.isNotEmpty()) setOf(initialCategory) else emptySet(),
+            account = initialAccount.ifEmpty { null },
             from = runCatching { monthStart(YearMonth.parse(initialMonth)) }.getOrDefault(0L),
             to = runCatching { monthEnd(YearMonth.parse(initialMonth)) }.getOrDefault(Long.MAX_VALUE),
         ),
@@ -147,8 +157,10 @@ class TransactionsViewModel(c: AppContainer, initialCategory: String, initialMon
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun TransactionsScreen(initialCategory: String, initialMonth: String, onEdit: (Long) -> Unit, onAdd: () -> Unit) {
-    val vm = appViewModel(key = "tx:$initialCategory:$initialMonth") { TransactionsViewModel(it, initialCategory, initialMonth) }
+fun TransactionsScreen(initialCategory: String, initialMonth: String, initialAccount: String, onEdit: (Long) -> Unit, onAdd: () -> Unit) {
+    val vm = appViewModel(key = "tx:$initialCategory:$initialMonth:$initialAccount") {
+        TransactionsViewModel(it, initialCategory, initialMonth, initialAccount)
+    }
     val s by vm.state.collectAsStateWithLifecycle()
     val f by vm.filter.collectAsStateWithLifecycle()
     var showCategories by remember { mutableStateOf(false) }
@@ -169,33 +181,47 @@ fun TransactionsScreen(initialCategory: String, initialMonth: String, onEdit: (L
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(28.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = LocalMoneyColors.current.card,
+                    focusedContainerColor = LocalMoneyColors.current.card,
+                    unfocusedBorderColor = Color.Transparent,
+                ),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
+            val chipColors = FilterChipDefaults.filterChipColors(containerColor = LocalMoneyColors.current.card)
             Row(
                 Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 val catLabel = when (f.categories.size) {
                     0 -> "Category"
-                    1 -> s.categoryMap[f.categories.first()]?.let { "${it.emoji} ${it.name}" } ?: "1 category"
+                    1 -> s.categoryMap[f.categories.first()]?.name ?: "1 category"
                     else -> "${f.categories.size} categories"
                 }
                 FilterChip(
                     selected = f.categories.isNotEmpty(),
                     onClick = { showCategories = true },
                     label = { Text(catLabel) },
+                    leadingIcon = f.categories.singleOrNull()?.let { key ->
+                        { Icon(categoryIcon(key), contentDescription = null, tint = s.categoryMap[key].color(), modifier = Modifier.size(18.dp)) }
+                    },
                     trailingIcon = { Icon(Icons.Filled.ArrowDropDown, null) },
+                    colors = chipColors,
+                    border = null,
                 )
                 Box {
                     val acct = s.accounts.firstOrNull { it.account == f.account }
                     FilterChip(
                         selected = f.account != null,
                         onClick = { showAccounts = true },
-                        label = { Text(acct?.let(::accountLabel) ?: f.account?.let { "••$it" } ?: "Account") },
+                        label = { Text(acct?.let(::accountLabel) ?: f.account?.let { if (it == CASH_KEY) "Cash" else "••$it" } ?: "Account") },
                         trailingIcon = { Icon(Icons.Filled.ArrowDropDown, null) },
+                        colors = chipColors,
+                        border = null,
                     )
                     DropdownMenu(expanded = showAccounts, onDismissRequest = { showAccounts = false }) {
                         DropdownMenuItem(text = { Text("All accounts") }, onClick = { vm.update { it.copy(account = null) }; showAccounts = false })
+                        DropdownMenuItem(text = { Text("Cash") }, onClick = { vm.update { it.copy(account = CASH_KEY) }; showAccounts = false })
                         s.accounts.forEach { a ->
                             DropdownMenuItem(
                                 text = { Text("${accountLabel(a)}  (${a.n})") },
@@ -210,6 +236,8 @@ fun TransactionsScreen(initialCategory: String, initialMonth: String, onEdit: (L
                     onClick = { showDates = true },
                     label = { Text(if (hasDates) "${shortDate(f.from)} – ${shortDate(f.to - 1)}" else "Any date") },
                     trailingIcon = { Icon(Icons.Filled.ArrowDropDown, null) },
+                    colors = chipColors,
+                    border = null,
                 )
                 if (f.categories.isNotEmpty() || f.account != null || hasDates) {
                     TextButton(onClick = { vm.update { TxnFilter(query = it.query) } }) { Text("Clear") }
@@ -300,9 +328,16 @@ private fun DayHeader(h: TxRow.Header) {
 }
 
 @Composable
-fun TransactionRow(t: TransactionEntity, category: CategoryEntity?, onClick: () -> Unit) {
+fun TransactionRow(
+    t: TransactionEntity,
+    category: CategoryEntity?,
+    onClick: () -> Unit,
+    padding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+    showDate: Boolean = false,
+    showCategory: Boolean = true,
+) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(padding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CategoryBadge(category)
@@ -315,10 +350,10 @@ fun TransactionRow(t: TransactionEntity, category: CategoryEntity?, onClick: () 
                 overflow = TextOverflow.Ellipsis,
             )
             val bits = buildList {
-                add(category?.name ?: t.categoryKey)
+                if (showCategory) add(category?.name ?: t.categoryKey)
                 t.account?.let { add("••$it") }
                 if (t.source == "MANUAL") add("Cash")
-                add(timeOfDay(t.timestamp))
+                add(if (showDate) "${shortDate(t.timestamp)}, ${timeOfDay(t.timestamp)}" else timeOfDay(t.timestamp))
                 if (t.excluded) add("Excluded")
             }
             Text(
@@ -333,7 +368,7 @@ fun TransactionRow(t: TransactionEntity, category: CategoryEntity?, onClick: () 
             }
         }
         Spacer(Modifier.width(8.dp))
-        AmountText(t.amountPaise, credit = t.isCredit, excluded = t.excluded)
+        AmountText(t.amountPaise, credit = t.isCredit, excluded = t.excluded, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -351,7 +386,9 @@ private fun CategoryFilterDialog(all: List<CategoryEntity>, selected: Set<String
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Checkbox(checked = c.key in sel, onCheckedChange = { sel = if (it) sel + c.key else sel - c.key })
-                        Text("${c.emoji}  ${c.name}")
+                        CategoryBadge(c, 28.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(c.name)
                     }
                 }
             }

@@ -41,7 +41,7 @@ interface TransactionDao {
         """SELECT * FROM transactions WHERE deleted = 0
            AND timestamp >= :from AND timestamp < :to
            AND (:allCategories = 1 OR categoryKey IN (:categories))
-           AND (:account IS NULL OR account = :account)
+           AND (:account IS NULL OR account = :account OR (:account = 'cash' AND source = 'MANUAL'))
            AND (:q = '' OR merchant LIKE '%' || :q || '%' OR note LIKE '%' || :q || '%'
                 OR vpa LIKE '%' || :q || '%' OR rawText LIKE '%' || :q || '%'
                 OR CAST(amountPaise / 100 AS TEXT) LIKE :q || '%')
@@ -67,6 +67,16 @@ interface TransactionDao {
            WHERE deleted = 0 AND account IS NOT NULL GROUP BY account ORDER BY n DESC""",
     )
     fun observeAccounts(): Flow<List<AccountRow>>
+
+    /** Card numbers that any SMS called a credit card. */
+    @Query("SELECT DISTINCT account FROM transactions WHERE accountKind = 'CREDIT_CARD' AND account IS NOT NULL")
+    fun observeCreditCardAccounts(): Flow<List<String>>
+
+    @Query("SELECT * FROM transactions WHERE source = 'SMS' AND rawText IS NOT NULL")
+    suspend fun smsTransactions(): List<TransactionEntity>
+
+    @Query("UPDATE transactions SET accountKind = :kind WHERE id = :id")
+    suspend fun setAccountKind(id: Long, kind: String?)
 
     @Query("UPDATE transactions SET categoryKey = :category WHERE merchantKey = :merchantKey")
     suspend fun setCategoryForMerchant(merchantKey: String, category: String): Int

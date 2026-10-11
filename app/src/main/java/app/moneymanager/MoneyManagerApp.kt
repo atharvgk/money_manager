@@ -27,7 +27,12 @@ class MoneyManagerApp : Application() {
         container = AppContainer(this)
         Notifier.createChannels(this)
         InboxSyncWorker.schedulePeriodic(this)
-        container.appScope.launch { container.repository.ensureSeeded() }
+        container.appScope.launch {
+            container.repository.ensureSeeded()
+            val settings = container.settings
+            val from = settings.dataVersion()
+            if (from < Repository.DATA_VERSION) runCatching { settings.setDataVersion(container.repository.upgradeData(from)) }
+        }
         ProcessLifecycleOwner.get().lifecycle.addObserver(container.lock)
     }
 }

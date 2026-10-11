@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -22,6 +23,8 @@ data class AppPrefs(
     val appLock: Boolean,
     val theme: ThemeMode,
     val notifyOnTransaction: Boolean,
+    /** Monthly spending budget in paise; 0 = not set. */
+    val monthlyBudget: Long,
 )
 
 class SettingsStore(private val context: Context) {
@@ -32,6 +35,8 @@ class SettingsStore(private val context: Context) {
         val APP_LOCK = booleanPreferencesKey("app_lock")
         val THEME = stringPreferencesKey("theme")
         val NOTIFY = booleanPreferencesKey("notify")
+        val BUDGET = longPreferencesKey("monthly_budget")
+        val DATA_VERSION = intPreferencesKey("data_version")
     }
 
     val prefs: Flow<AppPrefs> = context.dataStore.data.map { p ->
@@ -42,6 +47,7 @@ class SettingsStore(private val context: Context) {
             appLock = p[K.APP_LOCK] ?: false,
             theme = p[K.THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
             notifyOnTransaction = p[K.NOTIFY] ?: true,
+            monthlyBudget = p[K.BUDGET] ?: 0L,
         )
     }
 
@@ -57,4 +63,9 @@ class SettingsStore(private val context: Context) {
     suspend fun setAppLock(v: Boolean) = set(K.APP_LOCK, v)
     suspend fun setTheme(v: ThemeMode) = set(K.THEME, v.name)
     suspend fun setNotify(v: Boolean) = set(K.NOTIFY, v)
+    suspend fun setMonthlyBudget(paise: Long) = set(K.BUDGET, paise.coerceAtLeast(0))
+
+    /** One-time upgrades of stored data (see [app.moneymanager.data.Repository.upgradeData]). */
+    suspend fun dataVersion(): Int = context.dataStore.data.first()[K.DATA_VERSION] ?: 0
+    suspend fun setDataVersion(v: Int) = set(K.DATA_VERSION, v)
 }

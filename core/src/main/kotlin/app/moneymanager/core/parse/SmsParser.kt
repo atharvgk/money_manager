@@ -104,6 +104,7 @@ object SmsParser {
 
         var display = MerchantNames.display(merchantRaw, vpa)
         if (TxnHint.ATM in hints) display = "ATM"
+        val bank = sender.bank ?: Senders.bankFromBody(text)
 
         return ParseResult.Parsed(
             ParsedTxn(
@@ -111,8 +112,8 @@ object SmsParser {
                 amountPaise = amount,
                 timestamp = Dates.resolve(text, msg.timestamp, zone),
                 account = account?.digits,
-                accountKind = account?.kind,
-                bank = sender.bank ?: Senders.bankFromBody(text),
+                accountKind = Extract.accountKind(text, account, bank),
+                bank = bank,
                 merchant = display,
                 vpa = vpa,
                 reference = ref,

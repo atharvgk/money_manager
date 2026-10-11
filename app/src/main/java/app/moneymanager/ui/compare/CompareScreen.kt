@@ -45,6 +45,7 @@ import app.moneymanager.AppContainer
 import app.moneymanager.core.analysis.Summaries
 import app.moneymanager.core.format.Inr
 import app.moneymanager.data.db.CategoryEntity
+import app.moneymanager.ui.common.CategoryBadge
 import app.moneymanager.ui.common.ColorDot
 import app.moneymanager.ui.common.EmptyState
 import app.moneymanager.ui.common.SectionCard
@@ -113,7 +114,7 @@ fun CompareScreen() {
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Compare months", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text("Compare", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f).padding(start = 4.dp))
                 SingleChoiceSegmentedButtonRow {
                     listOf(6, 12).forEachIndexed { i, n ->
                         SegmentedButton(
@@ -151,32 +152,36 @@ private fun ChartCard(s: CompareState) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             top.forEachIndexed { i, r ->
                 val c = s.categories[r.key]
-                LegendItem(colors[i], "${c?.emoji ?: ""} ${c?.name ?: r.key}")
+                LegendItem(colors[i], c, c?.name ?: r.key)
             }
-            if (rest.isNotEmpty()) LegendItem(fold, "Other (${rest.size})")
+            if (rest.isNotEmpty()) LegendItem(fold, null, "Other (${rest.size})")
         }
     }
 }
 
+/** The category's own icon doubles as the colour key; the folded "Other" gets a plain dot. */
 @Composable
-private fun LegendItem(color: Color, label: String) {
+private fun LegendItem(color: Color, category: CategoryEntity?, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        ColorDot(color, 8.dp)
+        if (category != null) CategoryBadge(category, 22.dp) else ColorDot(color, 10.dp)
         Spacer(Modifier.width(6.dp))
         Text(label, style = MaterialTheme.typography.labelMedium)
     }
 }
 
-private val NAME_COL = 128.dp
+private val NAME_COL = 144.dp
 private val CELL = 76.dp
 
 @Composable
 private fun TableCard(s: CompareState) {
     val scroll = rememberScrollState()
     LaunchedEffect(scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
+    // The month in progress would always look like "▼ less" than a whole month, so it isn't marked.
+    val now = YearMonth.now(zone)
+    fun previous(values: LongArray, i: Int): Long? = if (i > 0 && s.months[i] != now) values[i - 1] else null
     SectionCard(title = "Category × month") {
         Text(
-            "▲ more than the month before (by 10%+), ▼ less. Scroll sideways for older months.",
+            "▲ more than the month before (by 10%+), ▼ less. ${monthShort(now)} isn't marked until it's over. Scroll sideways for older months.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -191,14 +196,18 @@ private fun TableCard(s: CompareState) {
         s.rows.forEach { r ->
             val c = s.categories[r.key]
             TableRow(scroll, name = {
-                Text("${c?.emoji ?: ""} ${c?.name ?: r.key}", style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CategoryBadge(c, 24.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(c?.name ?: r.key, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }) {
-                r.values.forEachIndexed { i, v -> Cell(v, if (i > 0) r.values[i - 1] else null) }
+                r.values.forEachIndexed { i, v -> Cell(v, previous(r.values, i)) }
             }
         }
         HorizontalDivider()
         TableRow(scroll, name = { Text("Total", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold) }) {
-            s.totals.forEachIndexed { i, v -> Cell(v, if (i > 0) s.totals[i - 1] else null, bold = true) }
+            s.totals.forEachIndexed { i, v -> Cell(v, previous(s.totals, i), bold = true) }
         }
     }
 }

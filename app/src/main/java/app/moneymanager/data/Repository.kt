@@ -7,11 +7,13 @@ import app.moneymanager.core.categorize.Categorization
 import app.moneymanager.core.categorize.Categorizer
 import app.moneymanager.core.categorize.KeywordRule
 import app.moneymanager.core.categorize.SeedRules
+import app.moneymanager.core.model.ParseResult
 import app.moneymanager.core.model.ParsedTxn
 import app.moneymanager.core.model.SmsMessage
 import app.moneymanager.core.model.TxnHint
 import app.moneymanager.core.model.TxnType
 import app.moneymanager.core.parse.MerchantNames
+import app.moneymanager.core.parse.SmsParser
 import app.moneymanager.data.db.AppDatabase
 import app.moneymanager.data.db.CategoryEntity
 import app.moneymanager.data.db.RuleEntity
@@ -40,6 +42,7 @@ class Repository(val db: AppDatabase) {
     val unparsed: Flow<List<UnparsedEntity>> = unparsedDao.observeActive()
     val unparsedCount: Flow<Int> = unparsedDao.observeCount()
     val accounts = tx.observeAccounts()
+    val creditCardAccounts: Flow<List<String>> = tx.observeCreditCardAccounts()
     val earliestTimestamp: Flow<Long?> = tx.observeEarliest()
     val transactionCount: Flow<Int> = tx.observeCount()
 
@@ -143,7 +146,7 @@ class Repository(val db: AppDatabase) {
             reference = existing.reference ?: t.reference,
             balancePaise = existing.balancePaise ?: t.balancePaise,
             account = existing.account ?: t.account,
-            accountKind = existing.accountKind ?: t.accountKind?.name,
+            accountKind = existing.accountKind?.takeIf { it != "CARD" } ?: t.accountKind?.name ?: existing.accountKind,
             channel = existing.channel ?: t.channel?.name,
             hints = hints.joinToString(",") { it.name },
         )
@@ -230,11 +233,33 @@ class Repository(val db: AppDatabase) {
         return changed
     }
 
+    // ------------------------------------------------------------------ data upgrades
+
+    /**
+     * Re-reads stored SMS with the current parser to fill in what older versions didn't record.
+     * v1: credit card vs debit card vs bank account (for the Bank / Cards split). Categories, notes and
+     * amounts are never touched.
+     */
+    suspend fun upgradeData(fromVersion: Int): Int {
+        if (fromVersion >= DATA_VERSION) return DATA_VERSION
+        inTransaction {
+            for (t in tx.smsTransactions()) {
+                val parsed = SmsParser.parse(SmsMessage(t.sender.orEmpty(), t.rawText ?: continue, t.timestamp))
+                val p = (parsed as? ParseResult.Parsed)?.txn ?: continue
+                val kind = p.accountKind?.name ?: continue
+                if (p.account == t.account && kind != t.accountKind) tx.setAccountKind(t.id, kind)
+            }
+        }
+        return DATA_VERSION
+    }
+
     // ------------------------------------------------------------------ unparsed
 
     suspend fun dismissUnparsed(id: Long) = unparsedDao.dismiss(id)
 
     companion object {
+        const val DATA_VERSION = 1
+
         fun parseHints(s: String): Set<TxnHint> =
             s.split(',').mapNotNull { n -> runCatching { TxnHint.valueOf(n.trim()) }.getOrNull() }.toSet()
     }

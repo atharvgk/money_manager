@@ -6,7 +6,7 @@
       .\tools\send-sms.ps1 -File samples.txt     run every message from your samples.txt through the app
                                                  (unreadable ones show up in Settings -> Unparsed messages)
       .\tools\send-sms.ps1 -History              ~3 months of realistic sample bank SMS, so Compare and
-                                                 Recurring have something to show (emulator.ps1 -Seed does this)
+                                                 Bills have something to show (emulator.ps1 -Seed does this)
 
   -File and -History use a hook that exists only in debug builds and only works on the emulator: it runs each
   message through exactly the same parsing as an inbox scan, but with a date of our choosing. (The emulator
@@ -109,7 +109,7 @@ $monthly = @(
     @(5, 8, "VK-ICICIB", "ICICI Bank Credit Card XX5678 has been used for a transaction of INR {AMT}.00 on {MDY} at {TIME}. Info: NETFLIX. The Available Credit Limit on your card is INR 98,765.00", "649"),
     @(8, 11, "BZ-SBIUPI", "Dear UPI user A/C X4321 debited by {AMT}.0 on date {DMON} trf to AIRTEL Refno {REF}. If not u? call 1800111109. -SBI", "399"),
     @(10, 7, "VM-HDFCBK", "UPDATE: Your A/c XX1234 debited for INR {AMT}.00 on {DMONY}. Info: ACH D- GROWW-SIP-12345678. Avl bal:INR 52,000.00", "5000"),
-    @(12, 21, "VM-HDFCBK", "Txn Rs.{AMT}.00`nOn HDFC Bank Card 4321`nAt SPOTIFY`nby UPI {REF}`nOn {DM}`nNot You?`nCall 18002586161/SMS BLOCK CC 4321 to 7308080808", "119"),
+    @(12, 21, "VM-HDFCBK", "Txn Rs.{AMT}.00`nOn HDFC Bank Card 7788`nAt SPOTIFY`nby UPI {REF}`nOn {DM}`nNot You?`nCall 18002586161/SMS BLOCK CC 7788 to 7308080808", "119"),
     @(18, 19, "VM-HDFCBK", "Rs.{AMT}.00 debited from a/c **1234 on {DMY} to VPA cred.club@axisbank(UPI Ref No {REF}). Not you? Call on 18002586161 to report", "12000"),
     @(18, 19, "VK-ICICIB", "Dear Customer, Payment of INR {AMT}.00 has been received on your ICICI Bank Credit Card Account XX5678 on {DMONY}. Thank you.", "12000")
 )

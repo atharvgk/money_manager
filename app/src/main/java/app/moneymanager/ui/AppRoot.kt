@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
-import androidx.compose.material.icons.outlined.Autorenew
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -28,8 +28,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -40,7 +42,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.moneymanager.AppContainer
 import app.moneymanager.data.ThemeMode
+import app.moneymanager.ui.bills.BillsScreen
+import app.moneymanager.ui.common.AccountScope
 import app.moneymanager.ui.common.ProvideContainer
+import app.moneymanager.ui.common.zone
 import app.moneymanager.ui.compare.CompareScreen
 import app.moneymanager.ui.home.HomeScreen
 import app.moneymanager.ui.lock.LockScreen
@@ -48,25 +53,33 @@ import app.moneymanager.ui.onboarding.OnboardingScreen
 import app.moneymanager.ui.settings.RulesScreen
 import app.moneymanager.ui.settings.SettingsScreen
 import app.moneymanager.ui.settings.UnparsedScreen
-import app.moneymanager.ui.subscriptions.SubscriptionsScreen
+import app.moneymanager.ui.spend.CategoriesScreen
+import app.moneymanager.ui.spend.SpendScreen
+import app.moneymanager.ui.theme.LocalMoneyColors
 import app.moneymanager.ui.theme.MoneyManagerTheme
 import app.moneymanager.ui.transactions.AddTransactionSheet
 import app.moneymanager.ui.transactions.EditTransactionSheet
 import app.moneymanager.ui.transactions.TransactionsScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.time.YearMonth
 
 object Routes {
     const val HOME = "home"
     const val COMPARE = "compare"
-    const val TRANSACTIONS = "transactions?category={category}&month={month}"
-    const val SUBSCRIPTIONS = "subscriptions"
+    const val TRANSACTIONS = "transactions?category={category}&month={month}&account={account}"
+    const val BILLS = "bills"
     const val SETTINGS = "settings"
     const val RULES = "rules"
     const val UNPARSED = "unparsed"
+    const val SPEND = "spend?category={category}&month={month}&scope={scope}"
+    const val CATEGORIES = "categories?month={month}&scope={scope}"
 
-    fun transactions(category: String? = null, month: String? = null): String =
-        "transactions?category=${category.orEmpty()}&month=${month.orEmpty()}"
+    fun transactions(category: String? = null, month: String? = null, account: String? = null): String =
+        "transactions?category=${category.orEmpty()}&month=${month.orEmpty()}&account=${account.orEmpty()}"
+
+    fun spend(category: String?, month: YearMonth, scope: AccountScope) = "spend?category=${category.orEmpty()}&month=$month&scope=${scope.name}"
+    fun categories(month: YearMonth, scope: AccountScope) = "categories?month=$month&scope=${scope.name}"
 }
 
 private data class Tab(val route: String, val navRoute: String, val label: String, val icon: ImageVector)
@@ -75,7 +88,7 @@ private val tabs = listOf(
     Tab(Routes.HOME, Routes.HOME, "Home", Icons.Outlined.Home),
     Tab(Routes.COMPARE, Routes.COMPARE, "Compare", Icons.Outlined.BarChart),
     Tab(Routes.TRANSACTIONS, Routes.transactions(), "Transactions", Icons.AutoMirrored.Outlined.ReceiptLong),
-    Tab(Routes.SUBSCRIPTIONS, Routes.SUBSCRIPTIONS, "Recurring", Icons.Outlined.Autorenew),
+    Tab(Routes.BILLS, Routes.BILLS, "Bills", Icons.Outlined.CalendarMonth),
     Tab(Routes.SETTINGS, Routes.SETTINGS, "Settings", Icons.Outlined.Settings),
 )
 
@@ -131,7 +144,7 @@ private fun MainScaffold(openTxn: MutableStateFlow<Long?>) {
     Scaffold(
         bottomBar = {
             if (tabs.any { it.route == currentRoute }) {
-                NavigationBar {
+                NavigationBar(containerColor = LocalMoneyColors.current.card, tonalElevation = 0.dp) {
                     tabs.forEach { tab ->
                         NavigationBarItem(
                             selected = currentRoute == tab.route,
@@ -147,9 +160,44 @@ private fun MainScaffold(openTxn: MutableStateFlow<Long?>) {
         NavHost(nav, startDestination = Routes.HOME, modifier = Modifier.padding(bottom = padding.calculateBottomPadding())) {
             composable(Routes.HOME) {
                 HomeScreen(
-                    onOpenCategory = { cat, month -> nav.navigateTab(Routes.transactions(cat, month)) },
+                    onOpenSpend = { cat, month, scope -> nav.navigate(Routes.spend(cat, month, scope)) },
+                    onOpenCategories = { month, scope -> nav.navigate(Routes.categories(month, scope)) },
+                    onOpenTransactions = { account, month -> nav.navigateTab(Routes.transactions(month = month.toString(), account = account)) },
+                    onOpenBills = { nav.navigateTab(Routes.BILLS) },
                     onOpenSettings = { nav.navigateTab(Routes.SETTINGS) },
                     onAdd = { adding = true },
+                    onEdit = { editing = it },
+                )
+            }
+            composable(
+                Routes.SPEND,
+                arguments = listOf(
+                    navArgument("category") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("month") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("scope") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                SpendScreen(
+                    category = entry.arguments?.getString("category").orEmpty().ifEmpty { null },
+                    startMonth = entry.monthArg(),
+                    startScope = entry.scopeArg(),
+                    onBack = { nav.popBackStack() },
+                    onOpenCategory = { cat, month, scope -> nav.navigate(Routes.spend(cat, month, scope)) },
+                    onEdit = { editing = it },
+                )
+            }
+            composable(
+                Routes.CATEGORIES,
+                arguments = listOf(
+                    navArgument("month") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("scope") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                CategoriesScreen(
+                    startMonth = entry.monthArg(),
+                    startScope = entry.scopeArg(),
+                    onBack = { nav.popBackStack() },
+                    onOpenCategory = { cat, month, scope -> nav.navigate(Routes.spend(cat, month, scope)) },
                 )
             }
             composable(Routes.COMPARE) { CompareScreen() }
@@ -158,16 +206,18 @@ private fun MainScaffold(openTxn: MutableStateFlow<Long?>) {
                 arguments = listOf(
                     navArgument("category") { type = NavType.StringType; defaultValue = "" },
                     navArgument("month") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("account") { type = NavType.StringType; defaultValue = "" },
                 ),
             ) { entry ->
                 TransactionsScreen(
                     initialCategory = entry.arguments?.getString("category").orEmpty(),
                     initialMonth = entry.arguments?.getString("month").orEmpty(),
+                    initialAccount = entry.arguments?.getString("account").orEmpty(),
                     onEdit = { editing = it },
                     onAdd = { adding = true },
                 )
             }
-            composable(Routes.SUBSCRIPTIONS) { SubscriptionsScreen() }
+            composable(Routes.BILLS) { BillsScreen() }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     onOpenRules = { nav.navigate(Routes.RULES) },
@@ -182,6 +232,12 @@ private fun MainScaffold(openTxn: MutableStateFlow<Long?>) {
     editing?.let { id -> EditTransactionSheet(id = id, onDismiss = { editing = null }) }
     if (adding) AddTransactionSheet(onDismiss = { adding = false })
 }
+
+private fun NavBackStackEntry.monthArg(): YearMonth =
+    runCatching { YearMonth.parse(arguments?.getString("month")) }.getOrDefault(YearMonth.now(zone))
+
+private fun NavBackStackEntry.scopeArg(): AccountScope =
+    runCatching { AccountScope.valueOf(arguments?.getString("scope").orEmpty()) }.getOrDefault(AccountScope.ALL)
 
 private fun NavHostController.navigateTab(route: String) {
     navigate(route) {

@@ -105,6 +105,31 @@ internal object Extract {
 
     fun hasAccountRef(text: String) = accounts(text).isNotEmpty()
 
+    // A plain "Card 5678" doesn't say whether it's a credit or a debit card; these clues usually do.
+    private val CREDIT_CLUES = Regex(
+        """\b(?:av(?:ai)?l(?:able)?\.?\s*(?:credit\s*)?(?:limit|lmt)|credit\s+limit|cardmember|block\s+cc|credit\s+card)\b""",
+        IC,
+    )
+    private val DEBIT_CLUES = Regex("""\b(?:block\s+dc|debit\s+card)\b""", IC)
+    private val CREDIT_CARD_ACCOUNT = Regex("""\bcredit\s+card\s+(?:a/c|acct|account)\b""", IC)
+    private val CARD_ISSUERS = setOf("SBI Card", "American Express", "OneCard", "slice")
+
+    /** Settles [AccountKind.CARD] into a credit or debit card where the message gives it away. */
+    fun accountKind(text: String, account: AccountRef?, bank: String?): AccountKind? {
+        val kind = account?.kind ?: return null
+        return when (kind) {
+            AccountKind.CARD -> when {
+                bank in CARD_ISSUERS -> AccountKind.CREDIT_CARD
+                DEBIT_CLUES.containsMatchIn(text) -> AccountKind.DEBIT_CARD
+                CREDIT_CLUES.containsMatchIn(text) -> AccountKind.CREDIT_CARD
+                else -> AccountKind.CARD
+            }
+            // "Credit Card Account XX5678" is read as an account number.
+            AccountKind.BANK -> if (CREDIT_CARD_ACCOUNT.containsMatchIn(text) || bank in CARD_ISSUERS) AccountKind.CREDIT_CARD else kind
+            else -> kind
+        }
+    }
+
     // ---------------------------------------------------------------- references
 
     private val REF_LABELED = Regex(

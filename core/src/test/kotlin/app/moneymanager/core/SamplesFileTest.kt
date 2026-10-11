@@ -7,7 +7,6 @@ import app.moneymanager.core.model.TxnType
 import app.moneymanager.core.parse.SmsParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.fail
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
@@ -32,7 +31,12 @@ class SamplesFileTest {
     @Test fun samples_txt_parses() {
         val path = System.getProperty("samples.file") ?: "../samples.txt"
         val file = File(path)
-        assumeTrue("samples.txt not found at ${file.absolutePath}; skipping", file.exists())
+        // No samples.txt on this PC (or on a phone/emulator running the tests): nothing to check. Not an
+        // "assumption" skip, because Android's test runner reports those as failures.
+        if (!file.exists()) {
+            println("samples.txt not found at ${file.absolutePath}; nothing to check")
+            return
+        }
         run(read(file.readLines(Charsets.UTF_8)), System.getProperty("samples.report")?.let(::File))
     }
 
